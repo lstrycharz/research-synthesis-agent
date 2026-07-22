@@ -1,0 +1,25 @@
+# Deterministic floor as a merge gate (Bitbucket Pipelines).
+# Copy to repo root as bitbucket-pipelines.yml, then add a branch-merge check /
+# required pipeline so PRs can't merge while this is red (see BRANCH_PROTECTION.md).
+#
+# Runs the SAME .claude/verify.sh the pre-commit hook and the agent run.
+#
+# NOTE: this image is Node-only. If your project has Python, verify.sh runs it via
+# `uv run` / `poetry run` — switch to a Python-capable image or add a setup step
+# (install uv/poetry) before verify.sh, or the Python checks silently no-op (false green).
+image: node:22
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: verify
+          script:
+            - if [ -f package-lock.json ]; then npm ci; elif [ -f package.json ]; then npm install; fi
+            - bash .claude/verify.sh
+  branches:
+    develop:
+      - step:
+          name: verify
+          script:
+            - if [ -f package-lock.json ]; then npm ci; elif [ -f package.json ]; then npm install; fi
+            - bash .claude/verify.sh

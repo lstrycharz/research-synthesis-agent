@@ -1,0 +1,49 @@
+[project]
+name = "research-synthesis-agent"
+version = "0.1.0"
+description = "Multi-agent LangGraph pipeline: supervisor decomposes a question, parallel searcher + summarizer workers process sub-questions, supervisor assembles a report. Langfuse traces every LLM call."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "langchain-anthropic>=1.5.0",
+    "langfuse>=3.3.1",
+    "langgraph>=1.2.9",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.2",
+    "python-dotenv>=1.2.2",
+    "tavily-python>=0.7.26",
+]
+
+[tool.uv]
+# Application, not a library — uv manages the venv but does not build/install `src`.
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# stdlib → third-party → local import ordering (I), plus common correctness/style rules.
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+# LangGraph / Langfuse / Tavily ship without complete type stubs — don't fail on their imports.
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+# Auto mode: async tests run without a per-test @pytest.mark.asyncio decorator.
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.15.22",
+]

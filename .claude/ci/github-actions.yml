@@ -1,0 +1,31 @@
+# Deterministic floor as a merge gate (GitHub Actions).
+# Copy to .github/workflows/verify.yml, then enable branch protection so PRs
+# can't merge while this is red (see BRANCH_PROTECTION.md — that step is manual).
+#
+# Runs the SAME .claude/verify.sh the pre-commit hook and the agent run, so the
+# gate is identical locally and in CI.
+name: verify
+on:
+  pull_request:
+  push:
+    branches: [main, master, develop, release]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # NOTE: this image is Node-only. If your project has Python, verify.sh runs
+      # it via `uv run` / `poetry run` — switch to a Python-capable image or add a
+      # setup step (e.g. astral-sh/setup-uv), or the Python checks silently no-op
+      # and you get a false green.
+      # Adjust install step for your stack (npm ci / pip install / etc.).
+      - name: Install deps
+        run: |
+          if [ -f package-lock.json ]; then npm ci
+          elif [ -f package.json ]; then npm install
+          fi
+      - name: Run the floor
+        run: bash .claude/verify.sh

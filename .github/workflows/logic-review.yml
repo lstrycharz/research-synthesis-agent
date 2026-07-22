@@ -1,0 +1,71 @@
+# Cross-vendor logic review (ADVISORY) — GitHub Actions.
+#
+# An independent second-vendor model reviews the PR diff for semantic / security
+# flaws that lint + type-checking can't catch. This is the "smart review" layer
+# that sits ON TOP of the deterministic floor (verify.sh) — intentionally NOT
+# part of it, because an LLM verdict is probabilistic and the floor stays
+# intent-proof.
+#
+# ADVISORY-FIRST: review-diff.mjs logs findings but exits 0 — it does NOT block
+# the merge while we gather false-positive + prompt-injection data. The only
+# non-zero exit is a missing OPENROUTER_API_KEY, so a misconfigured gate is
+# visible instead of silently no-op-ing.
+#
+# Setup:
+#   1. Copy to .github/workflows/logic-review.yml
+#   2. Add OPENROUTER_API_KEY as a repository secret
+#      (Settings → Secrets and variables → Actions).
+#   3. Optional: set LOGIC_REVIEWER_MODEL to pin a specific cross-vendor model.
+name: logic-review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+  pull-requests: write # post the advisory findings as a PR comment
+jobs:
+  logic-review:
+    runs-on: ubuntu-latest
+    env:
+      COMMENT_FILE: ${{ github.workspace }}/logic-review.md
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so the diff against the base ref resolves
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Logic review (advisory)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Cross-vendor second opinion (NOT Claude, on purpose). Kimi K2.7-code
+          # (Moonshot AI) — code-specialized, 262K context. Swap this one line
+          # for any other OpenRouter ID (openrouter.ai/models).
+          LOGIC_REVIEWER_MODEL: moonshotai/kimi-k2.7-code
+          REVIEW_BASE_REF: origin/${{ github.base_ref }}
+          REVIEW_COMMENT_FILE: ${{ github.workspace }}/logic-review.md
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          node .claude/bin/review-diff.mjs
+      - name: Post findings to the PR
+        if: always() # still post even if the reviewer step was skipped/errored
+        # Posting can fail on a fork PR (GITHUB_TOKEN is read-only there) — never
+        # let that red the check; the reviewer is advisory and must not block.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          [ -f "$COMMENT_FILE" ] || { echo "no findings to post"; exit 0; }
+          # Update OUR existing comment (found by its stable marker) if present,
+          # else create one (no spam). Marker lookup, not --edit-last: that
+          # edits the last comment by the github-actions bot, which clobbers
+          # other bot workflows' comments (#16).
+          CID=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
+            --jq '[.[] | select(.body | startswith("<!-- logic-reviewer -->"))][0].id')
+          if [ -n "$CID" ] && [ "$CID" != "null" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${CID}" \
+              -F body=@"$COMMENT_FILE" > /dev/null
+          else
+            gh pr comment "$PR" --body-file "$COMMENT_FILE"
+          fi
