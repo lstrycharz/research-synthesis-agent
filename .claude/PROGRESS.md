@@ -20,9 +20,14 @@
   `run_tavily_search` deep core (retry-once on 429/5xx, never raises), `searcher_node`
   wrapper (injected httpx client w/ 10s timeout, partial-update return). 31 tests green;
   reviewer findings addressed (timeout + 4xx-boundary tests, contract narrowed).
+- **Chunk 5 — Summarizer** (`src/agents/summarizer.py`): async Haiku worker. `run_summarize`
+  deep core (empty search -> free canned note; model error -> degraded note; else invoke +
+  log_llm_call), `summarizer_node` (explicit SecretStr api_key, Langfuse handler when
+  configured). 40 tests green; reviewer findings addressed (honest caching docstring, error
+  degradation, missing-usage warning).
 
 ## In Progress
-- Nothing mid-flight. Clean stopping point after Chunk 4.
+- Nothing mid-flight. Clean stopping point after Chunk 5.
 
 ## Blocked
 - None.
@@ -49,6 +54,15 @@
 - Keys on hand: Anthropic + Tavily. **No Langfuse yet** — sign up (free) before Chunk 10's
   live run. Until then everything is built/tested with mocks; no API spend.
 - Pace: user wants **pause & explain after each chunk** (teaching build).
+- **Prompt caching is currently INERT** (summarizer): the ~80-token system prompt is below
+  Haiku's 2048-token minimum cacheable prefix, so `cache_control` does nothing. Current cost
+  math is therefore exactly correct. IF caching is ever enabled (prompt grows past 2048),
+  `usage_metadata.input_tokens` will include cache_read/cache_creation tokens that
+  `calculate_cost` prices at the flat input rate — extend `observability.calculate_cost` to
+  read `usage["input_token_details"]` with per-tier multipliers (read 0.1x, write 1.25x).
+- **Langfuse per-call construction** (summarizer): `get_langfuse_client()` builds a client
+  per node call. Fine (registry dedupes) but wasteful — build one client at startup in
+  Chunk 10 and thread it through, then simplify the node.
 
 ## Session resume protocol
 1. Read this file. 2. `git log --oneline -10`. 3. `.claude/verify.sh` (confirm green).
