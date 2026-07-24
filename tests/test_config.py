@@ -32,3 +32,12 @@ def test_settings_requires_anthropic_key() -> None:
     # Env is cleared by the autouse fixture; no .env source -> required keys missing.
     with pytest.raises(ValidationError):
         Settings(_env_file=None)  # type: ignore[call-arg]
+
+
+def test_settings_rejects_zero_max_sub_questions(monkeypatch: pytest.MonkeyPatch) -> None:
+    # max_sub_questions=0 would make the graph fan out to nothing and dead-end silently.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    monkeypatch.setenv("TAVILY_API_KEY", "y")
+    monkeypatch.setenv("MAX_SUB_QUESTIONS", "0")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)  # type: ignore[call-arg]

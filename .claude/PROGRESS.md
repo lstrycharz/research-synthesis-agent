@@ -17,30 +17,27 @@
   note; model error -> degraded note; else invoke + log_llm_call) + `summarizer_node`.
 - **Chunk 6 — Supervisor decompose** (`d5c35e4`): `DecomposedQuestion` (3-5), `run_decompose`
   (include_raw for cost; fails fast — essential), `decompose_node`.
-- **Chunk 7 — Supervisor assemble**: `AssembledReport`, `run_assemble` (degrades gracefully
-  on parse failure AND on invoke exception — non-essential), `assemble_node` writes
-  `report_intro`/`report_conclusion` (new state fields). Shared `src/agents/_llm.py`
-  (build_chat_model + langfuse_config) extracted; summarizer refactored to use it. 53 tests.
+- **Chunk 7 — Supervisor assemble** (`f306575`): `AssembledReport`, `run_assemble` (degrades
+  on parse failure AND invoke exception — non-essential), `assemble_node` writes
+  `report_intro`/`report_conclusion`. Shared `src/agents/_llm.py` extracted; summarizer refactored.
+- **Chunk 8 — Graph wiring** (`src/graph.py`): StateGraph, START -> decompose -> conditional
+  fan-out (`fan_out_research` -> one `research` Send per sub-question, capped at
+  max_sub_questions) -> fan-in -> assemble -> reporter -> END. `research_node` composes
+  searcher+summarizer per branch. Minimal `src/report.py` reporter (Chunk 9 enriches).
+  `max_sub_questions`/`search_results_per_query` now constrained `ge=1` (empty fan-out would
+  dead-end silently). 58 tests. Fan-in verified by test (2 summaries accumulate before assemble).
 
 ## In Progress
-- Nothing mid-flight. Clean stopping point after Chunk 7. **All agents built.**
+- Nothing mid-flight. Clean stopping point after Chunk 8. **Full pipeline wired end-to-end.**
 
 ## Blocked
 - None.
 
 ## Next Up (in order)
-1. **Chunk 8 — Graph wiring** (`src/graph.py`): StateGraph. START -> decompose ->
-   conditional edge that Sends one (searcher->summarizer) branch per sub-question ->
-   fan-in -> assemble -> reporter -> END. `recursion_limit=25`. Test routing with agents
-   mocked. Remember:
-   - Each `Send` payload to a searcher needs a distinct `index` (node_id; default 0 collides).
-   - **Cap fan-out** at `settings.max_sub_questions`: slice `sub_questions[:max]` before Send
-     (makes the currently-dead `MAX_SUB_QUESTIONS` knob real).
-   - searcher -> summarizer chaining: the summarizer needs its SearchResult. Simplest is a
-     combined search+summarize per branch, or a second Send keyed by SearchResult.
-2. **Chunk 9 — Reporter** (`src/report.py`): assemble final Markdown (intro + one section per
-   summary + conclusion + sources + cost table row via write_cost_row). Test valid Markdown.
-3. **Chunk 10 — CLI + first live run** (`src/main.py`): validate `settings.supervisor_model`
+1. **Chunk 9 — Reporter** (`src/report.py`): enrich the minimal reporter — proper Markdown
+   with source attribution per section and a cost-table row via `write_cost_row`. Test the
+   Markdown structure (all sections present, sources listed).
+2. **Chunk 10 — CLI + first live run** (`src/main.py`): validate `settings.supervisor_model`
    and `settings.worker_model` are in `MODEL_COSTS` at startup (fail fast); call `get_settings()`
    at startup so config errors surface before fan-out; `langfuse.flush()` before exit; build ONE
    Langfuse client at startup and thread it through (replaces per-node construction).

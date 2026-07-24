@@ -6,6 +6,7 @@ optional so the pipeline runs (with local cost tracking only) when they are abse
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,8 +25,9 @@ class Settings(BaseSettings):
     # Model routing and limits (override in .env).
     supervisor_model: str = "claude-sonnet-4-6"
     worker_model: str = "claude-haiku-4-5-20251001"
-    max_sub_questions: int = 5
-    search_results_per_query: int = 5
+    # >= 1: a zero/negative cap would fan the graph out to nothing and dead-end silently.
+    max_sub_questions: int = Field(default=5, ge=1)
+    search_results_per_query: int = Field(default=5, ge=1)
 
 
 @lru_cache
