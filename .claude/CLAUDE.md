@@ -22,7 +22,7 @@ Run the full test suite to orient yourself on project scope and current state. D
 - Python 3.12 (pinned via `.python-version`), managed with **uv** (see `uv.lock`)
 - LangGraph 1.x — StateGraph, `Send` fan-out, `Annotated` reducers
 - langchain-anthropic 1.x — Claude models via `.with_structured_output()`
-- Anthropic: supervisor = `claude-sonnet-4-6`, workers = `claude-haiku-4-5-20251001`
+- Anthropic: supervisor = `claude-sonnet-5`, workers = `claude-haiku-4-5-20251001`
 - Tavily (`tavily-python`) for web search; httpx for the HTTP layer
 - Langfuse v3 (OpenTelemetry-based) for tracing — **optional**, no-ops without keys
 - pydantic v2 + pydantic-settings for typed config; pytest + pytest-asyncio; ruff + mypy
@@ -77,8 +77,9 @@ Run the full test suite to orient yourself on project scope and current state. D
   **langgraph 1.x** and **langfuse v3** — verify imports against current docs, not the spec.
 - Langfuse v3 import is `from langfuse import observe` (NOT `from langfuse.decorators import observe`).
 - Langfuse `flush()` must run before process exit or traces are lost.
-- Cost constants: Haiku 4.5 = $1.00/$5.00 per 1M in/out; Sonnet 4.6 = $3.00/$15.00 (spec's
-  $0.80/$4.00 for Haiku was outdated).
+- Cost constants: Haiku 4.5 = $1.00/$5.00 per 1M in/out; Sonnet 5 = $2.00/$10.00
+  (INTRODUCTORY through 2026-08-31 — rises to $3.00/$15.00 on Sep 1; bump `MODEL_COSTS`
+  then). Sonnet 4.6 = $3.00/$15.00 kept for reference. Spec's $0.80/$4.00 Haiku was outdated.
 - LangGraph `Send` node functions receive the full state, not just the sub-question field.
 - Tavily free tier: 1000 req/month — mock in tests, use real calls sparingly.
 - `ChatAnthropic` did NOT pick up `ANTHROPIC_API_KEY` from env in this setup — pass

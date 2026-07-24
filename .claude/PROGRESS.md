@@ -29,31 +29,44 @@
 - **Chunk 9 — Reporter** (`src/report.py`): pure enriched reporter — title, exec summary, one
   section per summary with per-section Sources (escaped titles + http/https-allowlisted URLs —
   markdown-injection safe), conclusion, in-report cost table. Duplicate sub-questions merge
-  sources. 67 tests. NOTE: the docs/cost-breakdown.md one-line append (needs wall-clock latency)
-  is deferred to main.py (Chunk 10) via write_cost_row.
+  sources. 67 tests.
+- **Chunk 10 — CLI + first live run** (`src/main.py`, `dcd3561`/`9735119`): `python -m src.main
+  "question"`. Deterministic injectable core — `validate_models` (fail fast if a configured model
+  isn't priced), `build_output_path` (timestamped, slugified, traversal-safe under `outputs/`),
+  `run_research` (invoke graph -> save report -> append one cost row w/ wall-clock latency).
+  Thin `main()` shell: joins multi-word argv, builds ONE Langfuse client as the flush handle,
+  wraps the run so errors log + return 1 (no traceback leak), flushes in `finally`. Added
+  `claude-sonnet-5` pricing ($2/$10 intro, through 2026-08-31) and switched the default supervisor
+  model to it (matches `.env`; the stale `claude-sonnet-4-6` default would've failed validation).
+  76 tests. **VERIFIED LIVE**: real run of "How do electric cars work?" -> report in `outputs/`,
+  cost row ($0.0322, 5 sub-qs, 8 nodes), Langfuse traces confirmed via API. Graceful degradation
+  fired for real (one sub-q got off-topic Tavily hits -> summarizer confidence note, no crash).
 
 ## In Progress
-- Nothing mid-flight. Clean stopping point after Chunk 9. **Full pipeline wired; not yet run live.**
+- Nothing mid-flight. Clean stopping point after Chunk 10. **Full pipeline built AND verified live.**
 
 ## Blocked
 - None.
 
 ## Next Up (in order)
-1. **Chunk 10 — CLI + first live run** (`src/main.py`): validate `settings.supervisor_model`
-   and `settings.worker_model` are in `MODEL_COSTS` at startup (fail fast); call `get_settings()`
-   at startup so config errors surface before fan-out; `langfuse.flush()` before exit; build ONE
-   Langfuse client at startup and thread it through (replaces per-node construction).
-4. **Chunk 11 — README** (portfolio + interview prep: Business Impact, Failure Modes,
-   Defend as Engineer/Stakeholder).
+1. **Chunk 11 — README** (portfolio + interview prep): what it solves, install, run, sample output,
+   cost table from 3–5 real runs, plus **Business Impact**, **Failure Modes**, and
+   **Defend as Engineer / Defend as Stakeholder** sections (user's explicit additions).
 
 ## Known Issues / Notes
 - **Cost constants** (observability.py, single source of truth): Haiku 4.5 = $1.00/$5.00 per
-  1M; Sonnet 4.6 = $3.00/$15.00.
+  1M; Sonnet 5 = $2.00/$10.00 (INTRODUCTORY through **2026-08-31**, then $3.00/$15.00 — bump
+  `MODEL_COSTS` on Sep 1 or supervisor cost logs low). Sonnet 4.6 = $3.00/$15.00 kept for ref.
+- **Langfuse per-node construction not yet threaded** (deferred optimization): `main` builds one
+  client at startup for the flush handle, but each node's `langfuse_config()` still calls
+  `get_langfuse_client()` again. Langfuse v4 registers by public_key so these resolve to the same
+  underlying client (verified: traces land, no dupes) — it's wasteful, not wrong. Thread the
+  startup client through `_llm.langfuse_config` if this ever matters.
 - **Langfuse is v4** (OTEL-based). Import `from langfuse import get_client`; langchain tracing
   via `from langfuse.langchain import CallbackHandler` (needs `langchain` installed). Call
   `flush()` before exit. **This project is US region** — `LANGFUSE_HOST=https://us.cloud.langfuse.com`.
 - **All keys present** (.env): Anthropic + Tavily + Langfuse (US). Tests stay hermetic (mocks).
-- Models: supervisor `claude-sonnet-4-6`, workers `claude-haiku-4-5-20251001`.
+- Models: supervisor `claude-sonnet-5`, workers `claude-haiku-4-5-20251001`.
 - `ChatAnthropic` needs explicit `api_key=SecretStr(...)` (env-reading unreliable) — done via
   `_llm.build_chat_model`.
 - Pace: user wants **pause & explain after each chunk** (teaching build).
@@ -64,4 +77,4 @@
 
 ## Session resume protocol
 1. Read this file. 2. `git log --oneline -10`. 3. `.claude/verify.sh` (confirm green).
-4. Start Chunk 8.
+4. Start Chunk 11 (README) — the last chunk.
