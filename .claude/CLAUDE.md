@@ -81,6 +81,13 @@ Run the full test suite to orient yourself on project scope and current state. D
   $0.80/$4.00 for Haiku was outdated).
 - LangGraph `Send` node functions receive the full state, not just the sub-question field.
 - Tavily free tier: 1000 req/month — mock in tests, use real calls sparingly.
+- `ChatAnthropic` did NOT pick up `ANTHROPIC_API_KEY` from env in this setup — pass
+  `api_key=settings.anthropic_api_key` explicitly (verified via smoke test).
+- Langfuse is region-specific: this project is **US** — `LANGFUSE_HOST=https://us.cloud.langfuse.com`
+  (env var is `LANGFUSE_HOST`, not `LANGFUSE_BASE_URL`). Wrong region => 401 Unauthorized.
+- Langfuse langchain tracing (`from langfuse.langchain import CallbackHandler`) requires the
+  `langchain` package installed, and `CallbackHandler()` uses the global client — only attach
+  it when `get_langfuse_client()` returns non-None.
 
 ## Core Principles
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
