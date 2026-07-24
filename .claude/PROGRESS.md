@@ -26,18 +26,20 @@
   searcher+summarizer per branch. Minimal `src/report.py` reporter (Chunk 9 enriches).
   `max_sub_questions`/`search_results_per_query` now constrained `ge=1` (empty fan-out would
   dead-end silently). 58 tests. Fan-in verified by test (2 summaries accumulate before assemble).
+- **Chunk 9 — Reporter** (`src/report.py`): pure enriched reporter — title, exec summary, one
+  section per summary with per-section Sources (escaped titles + http/https-allowlisted URLs —
+  markdown-injection safe), conclusion, in-report cost table. Duplicate sub-questions merge
+  sources. 67 tests. NOTE: the docs/cost-breakdown.md one-line append (needs wall-clock latency)
+  is deferred to main.py (Chunk 10) via write_cost_row.
 
 ## In Progress
-- Nothing mid-flight. Clean stopping point after Chunk 8. **Full pipeline wired end-to-end.**
+- Nothing mid-flight. Clean stopping point after Chunk 9. **Full pipeline wired; not yet run live.**
 
 ## Blocked
 - None.
 
 ## Next Up (in order)
-1. **Chunk 9 — Reporter** (`src/report.py`): enrich the minimal reporter — proper Markdown
-   with source attribution per section and a cost-table row via `write_cost_row`. Test the
-   Markdown structure (all sections present, sources listed).
-2. **Chunk 10 — CLI + first live run** (`src/main.py`): validate `settings.supervisor_model`
+1. **Chunk 10 — CLI + first live run** (`src/main.py`): validate `settings.supervisor_model`
    and `settings.worker_model` are in `MODEL_COSTS` at startup (fail fast); call `get_settings()`
    at startup so config errors surface before fan-out; `langfuse.flush()` before exit; build ONE
    Langfuse client at startup and thread it through (replaces per-node construction).
