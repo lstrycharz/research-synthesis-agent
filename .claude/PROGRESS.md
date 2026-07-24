@@ -44,6 +44,12 @@
 4. **Chunk 8 graph wiring:** the supervisor's `Send` payloads to searchers must include a
    distinct `index` per sub-question (searcher_node uses it for node_id; default 0 collides).
    And call `get_settings()` at startup (main.py) so config errors surface before fan-out.
+5. **`settings.max_sub_questions` is currently a DEAD knob** — decompose hardcodes 3-5 (Pydantic
+   Field + prompt). Decision: **Chunk 8 caps fan-out** by slicing
+   `sub_questions[:settings.max_sub_questions]` before the Send fan-out, making the knob real.
+6. **Chunk 7 (assemble):** extract a shared `_build_model_invoke(model_name, max_tokens)` helper
+   — decompose_node/summarizer_node/assemble_node all duplicate the ChatAnthropic + Langfuse
+   handler + `_invoke` wrapper block (dedup once assemble makes it the third copy).
 
 ## Known Issues / Notes
 - **Cost constants (single source of truth in observability.py):** Haiku 4.5 = $1.00 in /
