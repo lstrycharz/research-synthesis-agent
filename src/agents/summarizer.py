@@ -18,11 +18,10 @@ from collections.abc import Awaitable, Callable
 from typing import cast
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_core.runnables import RunnableConfig
-from pydantic import SecretStr
 
+from src.agents._llm import build_chat_model, langfuse_config
 from src.config import get_settings
-from src.observability import get_langfuse_client, log_llm_call
+from src.observability import log_llm_call
 from src.state import CostEntry, SearchResult, Summary
 
 logger = logging.getLogger(__name__)
@@ -144,22 +143,8 @@ async def summarizer_node(payload: dict[str, object]) -> dict[str, object]:
     settings = get_settings()
     search_result = cast(SearchResult, payload)
 
-    from langchain_anthropic import ChatAnthropic
-
-    # `model` / `max_tokens` are pydantic aliases mypy can't see; api_key wants SecretStr.
-    model = ChatAnthropic(  # type: ignore[call-arg]
-        model=settings.worker_model,
-        api_key=SecretStr(settings.anthropic_api_key),  # explicit — env-reading unreliable here
-        max_tokens=_MAX_TOKENS,
-    )
-
-    config: RunnableConfig = {}
-    # Constructing the Langfuse client registers it in the global registry that
-    # CallbackHandler() resolves — the return value's side effect is load-bearing.
-    if get_langfuse_client(settings) is not None:
-        from langfuse.langchain import CallbackHandler
-
-        config = {"callbacks": [CallbackHandler()]}
+    model = build_chat_model(settings, model_name=settings.worker_model, max_tokens=_MAX_TOKENS)
+    config = langfuse_config(settings)
 
     async def _invoke(messages: list[BaseMessage]) -> AIMessage:
         response = await model.ainvoke(messages, config=config)

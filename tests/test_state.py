@@ -83,6 +83,8 @@ def test_research_state_accepts_full_state() -> None:
         "sub_questions": ["What is a battery?"],
         "search_results": [],
         "summaries": [],
+        "report_intro": "",
+        "report_conclusion": "",
         "final_report": "",
         "cost_log": [],
         "error": None,

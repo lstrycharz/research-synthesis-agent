@@ -11,11 +11,29 @@ import pytest
 from langchain_core.messages import AIMessage, BaseMessage
 from pydantic import ValidationError
 
-from src.agents.supervisor import DecomposedQuestion, decompose_node, run_decompose
+from src.agents.supervisor import (
+    AssembledReport,
+    DecomposedQuestion,
+    assemble_node,
+    decompose_node,
+    run_assemble,
+    run_decompose,
+)
+from src.state import Summary
 
 InvokeFn = Callable[[list[BaseMessage]], Awaitable[dict[str, object]]]
 
 _SONNET = "claude-sonnet-4-6"
+
+
+def _summary(sub_question: str, content: str) -> Summary:
+    return {
+        "sub_question": sub_question,
+        "content": content,
+        "tokens_used": 10,
+        "model": _SONNET,
+        "cost_usd": 0.001,
+    }
 
 
 def _raw(input_tokens: int, output_tokens: int) -> AIMessage:
@@ -131,3 +149,85 @@ async def test_decompose_node_sets_sub_questions_and_cost_log(
     assert update["sub_questions"] == ["a", "b", "c"]
     assert isinstance(update["cost_log"], list)
     assert update["cost_log"][0]["node"] == "supervisor_decompose"
+
+
+async def test_run_assemble_returns_report_and_cost() -> None:
+    report = AssembledReport(executive_summary="An overview.", conclusion="In summary.")
+    invoke = _invoke_returning({"raw": _raw(2000, 1000), "parsed": report, "parsing_error": None})
+    assembled, entry = await run_assemble(
+        "How do EVs work?", [_summary("a", "x")], model_name=_SONNET, invoke=invoke
+    )
+    assert assembled.executive_summary == "An overview."
+    assert entry["node"] == "supervisor_assemble"
+    assert round(entry["cost_usd"], 6) == 0.021  # (2000*$3 + 1000*$15) / 1e6
+
+
+async def test_run_assemble_degrades_on_parse_failure() -> None:
+    # Assemble is NOT essential: a parse failure yields placeholders, not a crash.
+    invoke = _invoke_returning({"raw": _raw(10, 5), "parsed": None, "parsing_error": "bad"})
+    assembled, entry = await run_assemble(
+        "q", [_summary("a", "x")], model_name=_SONNET, invoke=invoke
+    )
+    assert assembled.executive_summary == ""
+    assert assembled.conclusion == ""
+    assert entry["input_tokens"] == 10  # tokens were spent; cost still recorded
+    assert entry["cost_usd"] > 0
+
+
+async def test_run_assemble_degrades_when_invoke_raises() -> None:
+    # A model error at the last, most expensive step must NOT kill the whole run.
+    async def boom(messages: list[BaseMessage]) -> dict[str, object]:
+        raise RuntimeError("api exploded")
+
+    assembled, entry = await run_assemble(
+        "q", [_summary("a", "x")], model_name=_SONNET, invoke=boom
+    )
+    assert assembled.executive_summary == ""
+    assert entry["node"] == "supervisor_assemble"
+    assert entry["cost_usd"] == 0.0
+
+
+async def test_run_assemble_passes_summaries_into_prompt() -> None:
+    seen: dict[str, list[BaseMessage]] = {}
+    report = AssembledReport(executive_summary="o", conclusion="c")
+
+    async def capturing(messages: list[BaseMessage]) -> dict[str, object]:
+        seen["messages"] = messages
+        return {"raw": _raw(1, 1), "parsed": report, "parsing_error": None}
+
+    await run_assemble(
+        "Q", [_summary("battery", "Batteries store energy")], model_name=_SONNET, invoke=capturing
+    )
+    human = seen["messages"][1]
+    text = human.content if isinstance(human.content, str) else str(human.content)
+    assert "Batteries store energy" in text
+
+
+async def test_assemble_node_writes_intro_conclusion_and_cost(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
+    monkeypatch.setenv("TAVILY_API_KEY", "y")
+
+    report = AssembledReport(executive_summary="Intro.", conclusion="Conclusion.")
+    entry = {
+        "node": "supervisor_assemble",
+        "model": _SONNET,
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "cost_usd": 0.001,
+        "latency_ms": 100,
+    }
+
+    async def stub(
+        question: str, summaries: list[Summary], *, model_name: str, invoke: InvokeFn
+    ) -> tuple[AssembledReport, dict[str, object]]:
+        return report, entry
+
+    monkeypatch.setattr("src.agents.supervisor.run_assemble", stub)
+    update = await assemble_node({"question": "Q", "summaries": [_summary("a", "x")]})
+
+    assert update["report_intro"] == "Intro."
+    assert update["report_conclusion"] == "Conclusion."
+    assert isinstance(update["cost_log"], list)
+    assert update["cost_log"][0]["node"] == "supervisor_assemble"

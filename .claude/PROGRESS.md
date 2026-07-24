@@ -3,73 +3,66 @@
 <!-- Cross-session handoff. Read this first when resuming. -->
 
 ## Completed
-- **Chunk 1 — Scaffold** (`99251ad`): uv + Python 3.12, dependency set locked in `uv.lock`.
-  Verified current versions (langgraph 1.x, langchain-anthropic 1.x, langfuse **v3**,
-  tavily-python, pydantic v2) — the original build spec's pins (langgraph 0.6.x, langfuse 2.x)
-  were stale. `src/` + `tests/` skeleton, `.env.example`, `docs/cost-breakdown.md`,
-  populated `CLAUDE.md`.
-- **Chunk 2 — Config + State** (`65c08da`): `src/state.py` (TypedDicts with operator.add
-  reducers on fan-in fields) + `src/config.py` (pydantic-settings, Langfuse-optional).
-  11 tests green; code-reviewer findings addressed (hermetic config tests, real validation).
-- **Chunk 3 — Observability**: `src/observability.py` — `MODEL_COSTS` (single source of
-  truth), `calculate_cost`, `log_llm_call` -> CostEntry, `write_cost_row` (markdown-safe
-  cell escaping), `get_langfuse_client` (None without keys, warns on partial config).
-  Shared env-isolation fixture moved to `tests/conftest.py`. 21 tests green; reviewer
-  findings addressed. Observability verified LIVE via smoke test (US Langfuse region).
-- **Chunk 4 — Searcher** (`src/agents/searcher.py`): async Tavily worker, no LLM.
-  `run_tavily_search` deep core (retry-once on 429/5xx, never raises), `searcher_node`
-  wrapper (injected httpx client w/ 10s timeout, partial-update return). 31 tests green;
-  reviewer findings addressed (timeout + 4xx-boundary tests, contract narrowed).
-- **Chunk 5 — Summarizer** (`src/agents/summarizer.py`): async Haiku worker. `run_summarize`
-  deep core (empty search -> free canned note; model error -> degraded note; else invoke +
-  log_llm_call), `summarizer_node` (explicit SecretStr api_key, Langfuse handler when
-  configured). 40 tests green; reviewer findings addressed (honest caching docstring, error
-  degradation, missing-usage warning).
+- **Chunk 1 — Scaffold** (`99251ad`): uv + Python 3.12, deps locked in `uv.lock`. Verified
+  current versions (langgraph 1.x, langchain-anthropic 1.x, **langfuse 4.x**, tavily-python,
+  pydantic v2) — the spec's pins (langgraph 0.6.x, langfuse 2.x) were stale.
+- **Chunk 2 — Config + State** (`65c08da`): `state.py` TypedDicts (operator.add reducers on
+  fan-in fields) + `config.py` (pydantic-settings, Langfuse-optional).
+- **Chunk 3 — Observability** (`919aaca`): `MODEL_COSTS` (single source of truth),
+  `calculate_cost`, `log_llm_call`, `write_cost_row`, `get_langfuse_client`. Verified LIVE
+  via smoke test (US Langfuse region). langchain dep added (`fbd4963`).
+- **Chunk 4 — Searcher** (`08a283d`): async Tavily worker, no LLM. `run_tavily_search` core
+  (retry-once on 429/5xx, never raises) + `searcher_node` (10s timeout, partial update).
+- **Chunk 5 — Summarizer** (`0201caa`): async Haiku worker. `run_summarize` (empty -> free
+  note; model error -> degraded note; else invoke + log_llm_call) + `summarizer_node`.
+- **Chunk 6 — Supervisor decompose** (`d5c35e4`): `DecomposedQuestion` (3-5), `run_decompose`
+  (include_raw for cost; fails fast — essential), `decompose_node`.
+- **Chunk 7 — Supervisor assemble**: `AssembledReport`, `run_assemble` (degrades gracefully
+  on parse failure AND on invoke exception — non-essential), `assemble_node` writes
+  `report_intro`/`report_conclusion` (new state fields). Shared `src/agents/_llm.py`
+  (build_chat_model + langfuse_config) extracted; summarizer refactored to use it. 53 tests.
 
 ## In Progress
-- Nothing mid-flight. Clean stopping point after Chunk 5.
+- Nothing mid-flight. Clean stopping point after Chunk 7. **All agents built.**
 
 ## Blocked
 - None.
 
 ## Next Up (in order)
-1. **Chunk 5 — Summarizer** (`src/agents/summarizer.py`): Haiku via ChatAnthropic
-   (pass api_key explicitly!), cacheable system prompt, structured Summary output, cost via
-   log_llm_call, handle empty search input gracefully. Attach Langfuse CallbackHandler only
-   when get_langfuse_client() is non-None. Test with mocked model.
-2. Chunks 6-11 per plan.
-3. **When wiring live LLM calls (Chunk 5/10):** validate `settings.supervisor_model` and
-   `settings.worker_model` are in `MODEL_COSTS` at pipeline start (fail fast, not mid-run);
-   key cost lookups on the *config* model ID, not the API response's (possibly dated) model.
-4. **Chunk 8 graph wiring:** the supervisor's `Send` payloads to searchers must include a
-   distinct `index` per sub-question (searcher_node uses it for node_id; default 0 collides).
-   And call `get_settings()` at startup (main.py) so config errors surface before fan-out.
-5. **`settings.max_sub_questions` is currently a DEAD knob** — decompose hardcodes 3-5 (Pydantic
-   Field + prompt). Decision: **Chunk 8 caps fan-out** by slicing
-   `sub_questions[:settings.max_sub_questions]` before the Send fan-out, making the knob real.
-6. **Chunk 7 (assemble):** extract a shared `_build_model_invoke(model_name, max_tokens)` helper
-   — decompose_node/summarizer_node/assemble_node all duplicate the ChatAnthropic + Langfuse
-   handler + `_invoke` wrapper block (dedup once assemble makes it the third copy).
+1. **Chunk 8 — Graph wiring** (`src/graph.py`): StateGraph. START -> decompose ->
+   conditional edge that Sends one (searcher->summarizer) branch per sub-question ->
+   fan-in -> assemble -> reporter -> END. `recursion_limit=25`. Test routing with agents
+   mocked. Remember:
+   - Each `Send` payload to a searcher needs a distinct `index` (node_id; default 0 collides).
+   - **Cap fan-out** at `settings.max_sub_questions`: slice `sub_questions[:max]` before Send
+     (makes the currently-dead `MAX_SUB_QUESTIONS` knob real).
+   - searcher -> summarizer chaining: the summarizer needs its SearchResult. Simplest is a
+     combined search+summarize per branch, or a second Send keyed by SearchResult.
+2. **Chunk 9 — Reporter** (`src/report.py`): assemble final Markdown (intro + one section per
+   summary + conclusion + sources + cost table row via write_cost_row). Test valid Markdown.
+3. **Chunk 10 — CLI + first live run** (`src/main.py`): validate `settings.supervisor_model`
+   and `settings.worker_model` are in `MODEL_COSTS` at startup (fail fast); call `get_settings()`
+   at startup so config errors surface before fan-out; `langfuse.flush()` before exit; build ONE
+   Langfuse client at startup and thread it through (replaces per-node construction).
+4. **Chunk 11 — README** (portfolio + interview prep: Business Impact, Failure Modes,
+   Defend as Engineer/Stakeholder).
 
 ## Known Issues / Notes
-- **Cost constants (single source of truth in observability.py):** Haiku 4.5 = $1.00 in /
-  $5.00 out per 1M; Sonnet 4.6 = $3.00 / $15.00. (Spec's $0.80/$4.00 for Haiku was outdated.)
-- **Langfuse v3 import:** `from langfuse import observe` (NOT `langfuse.decorators`).
-  Call `flush()` before process exit or traces are lost.
-- Models: supervisor `claude-sonnet-4-6`, workers `claude-haiku-4-5-20251001` (both valid).
-- Keys on hand: Anthropic + Tavily. **No Langfuse yet** — sign up (free) before Chunk 10's
-  live run. Until then everything is built/tested with mocks; no API spend.
+- **Cost constants** (observability.py, single source of truth): Haiku 4.5 = $1.00/$5.00 per
+  1M; Sonnet 4.6 = $3.00/$15.00.
+- **Langfuse is v4** (OTEL-based). Import `from langfuse import get_client`; langchain tracing
+  via `from langfuse.langchain import CallbackHandler` (needs `langchain` installed). Call
+  `flush()` before exit. **This project is US region** — `LANGFUSE_HOST=https://us.cloud.langfuse.com`.
+- **All keys present** (.env): Anthropic + Tavily + Langfuse (US). Tests stay hermetic (mocks).
+- Models: supervisor `claude-sonnet-4-6`, workers `claude-haiku-4-5-20251001`.
+- `ChatAnthropic` needs explicit `api_key=SecretStr(...)` (env-reading unreliable) — done via
+  `_llm.build_chat_model`.
 - Pace: user wants **pause & explain after each chunk** (teaching build).
-- **Prompt caching is currently INERT** (summarizer): the ~80-token system prompt is below
-  Haiku's 2048-token minimum cacheable prefix, so `cache_control` does nothing. Current cost
-  math is therefore exactly correct. IF caching is ever enabled (prompt grows past 2048),
-  `usage_metadata.input_tokens` will include cache_read/cache_creation tokens that
-  `calculate_cost` prices at the flat input rate — extend `observability.calculate_cost` to
-  read `usage["input_token_details"]` with per-tier multipliers (read 0.1x, write 1.25x).
-- **Langfuse per-call construction** (summarizer): `get_langfuse_client()` builds a client
-  per node call. Fine (registry dedupes) but wasteful — build one client at startup in
-  Chunk 10 and thread it through, then simplify the node.
+- **Prompt caching is INERT** (summarizer): ~80-token system prompt is below Haiku's
+  2048-token minimum cacheable prefix, so `cache_control` does nothing; current cost math is
+  exactly correct. If ever enabled, extend `calculate_cost` to read `usage["input_token_details"]`
+  with per-tier multipliers (read 0.1x, write 1.25x).
 
 ## Session resume protocol
 1. Read this file. 2. `git log --oneline -10`. 3. `.claude/verify.sh` (confirm green).
-4. Start Chunk 3.
+4. Start Chunk 8.

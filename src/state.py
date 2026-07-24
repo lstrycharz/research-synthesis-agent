@@ -50,6 +50,9 @@ class ResearchState(TypedDict):
     sub_questions: list[str]
     search_results: Annotated[list[SearchResult], operator.add]
     summaries: Annotated[list[Summary], operator.add]
+    # Written by the supervisor's assemble step (single writer); read by the reporter.
+    report_intro: str
+    report_conclusion: str
     final_report: str
     cost_log: Annotated[list[CostEntry], operator.add]
     # Supervisor-only (single writer). Worker failures go into SearchResult.error;
