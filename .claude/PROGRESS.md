@@ -15,23 +15,30 @@
   truth), `calculate_cost`, `log_llm_call` -> CostEntry, `write_cost_row` (markdown-safe
   cell escaping), `get_langfuse_client` (None without keys, warns on partial config).
   Shared env-isolation fixture moved to `tests/conftest.py`. 21 tests green; reviewer
-  findings addressed.
+  findings addressed. Observability verified LIVE via smoke test (US Langfuse region).
+- **Chunk 4 — Searcher** (`src/agents/searcher.py`): async Tavily worker, no LLM.
+  `run_tavily_search` deep core (retry-once on 429/5xx, never raises), `searcher_node`
+  wrapper (injected httpx client w/ 10s timeout, partial-update return). 31 tests green;
+  reviewer findings addressed (timeout + 4xx-boundary tests, contract narrowed).
 
 ## In Progress
-- Nothing mid-flight. Clean stopping point after Chunk 3.
+- Nothing mid-flight. Clean stopping point after Chunk 4.
 
 ## Blocked
 - None.
 
 ## Next Up (in order)
-1. **Chunk 4 — Searcher** (`src/agents/searcher.py`): Tavily via httpx, 10s timeout,
-   retry-once on 429/5xx, empty/error -> populate SearchResult.error, never crash the graph.
-   No LLM. Test with mocked Tavily.
-2. Chunks 5-11 per plan: summarizer -> supervisor decompose/assemble -> graph wiring ->
-   reporter -> CLI + first live run -> README.
+1. **Chunk 5 — Summarizer** (`src/agents/summarizer.py`): Haiku via ChatAnthropic
+   (pass api_key explicitly!), cacheable system prompt, structured Summary output, cost via
+   log_llm_call, handle empty search input gracefully. Attach Langfuse CallbackHandler only
+   when get_langfuse_client() is non-None. Test with mocked model.
+2. Chunks 6-11 per plan.
 3. **When wiring live LLM calls (Chunk 5/10):** validate `settings.supervisor_model` and
    `settings.worker_model` are in `MODEL_COSTS` at pipeline start (fail fast, not mid-run);
    key cost lookups on the *config* model ID, not the API response's (possibly dated) model.
+4. **Chunk 8 graph wiring:** the supervisor's `Send` payloads to searchers must include a
+   distinct `index` per sub-question (searcher_node uses it for node_id; default 0 collides).
+   And call `get_settings()` at startup (main.py) so config errors surface before fan-out.
 
 ## Known Issues / Notes
 - **Cost constants (single source of truth in observability.py):** Haiku 4.5 = $1.00 in /
