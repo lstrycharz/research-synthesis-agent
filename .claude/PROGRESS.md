@@ -11,19 +11,27 @@
 - **Chunk 2 — Config + State** (`65c08da`): `src/state.py` (TypedDicts with operator.add
   reducers on fan-in fields) + `src/config.py` (pydantic-settings, Langfuse-optional).
   11 tests green; code-reviewer findings addressed (hermetic config tests, real validation).
+- **Chunk 3 — Observability**: `src/observability.py` — `MODEL_COSTS` (single source of
+  truth), `calculate_cost`, `log_llm_call` -> CostEntry, `write_cost_row` (markdown-safe
+  cell escaping), `get_langfuse_client` (None without keys, warns on partial config).
+  Shared env-isolation fixture moved to `tests/conftest.py`. 21 tests green; reviewer
+  findings addressed.
 
 ## In Progress
-- Nothing mid-flight. Clean stopping point after Chunk 2.
+- Nothing mid-flight. Clean stopping point after Chunk 3.
 
 ## Blocked
 - None.
 
 ## Next Up (in order)
-1. **Chunk 3 — Observability** (`src/observability.py`): `MODEL_COSTS` constants,
-   `log_llm_call()`, `write_cost_row()` -> `docs/cost-breakdown.md`, Langfuse client that
-   no-ops without keys. Test cost calc to 6 decimals. TDD (red -> green -> review -> commit).
-4. Chunks 4-11 per plan: searcher -> summarizer -> supervisor decompose/assemble -> graph
-   wiring -> reporter -> CLI + first live run -> README.
+1. **Chunk 4 — Searcher** (`src/agents/searcher.py`): Tavily via httpx, 10s timeout,
+   retry-once on 429/5xx, empty/error -> populate SearchResult.error, never crash the graph.
+   No LLM. Test with mocked Tavily.
+2. Chunks 5-11 per plan: summarizer -> supervisor decompose/assemble -> graph wiring ->
+   reporter -> CLI + first live run -> README.
+3. **When wiring live LLM calls (Chunk 5/10):** validate `settings.supervisor_model` and
+   `settings.worker_model` are in `MODEL_COSTS` at pipeline start (fail fast, not mid-run);
+   key cost lookups on the *config* model ID, not the API response's (possibly dated) model.
 
 ## Known Issues / Notes
 - **Cost constants (single source of truth in observability.py):** Haiku 4.5 = $1.00 in /

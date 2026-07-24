@@ -1,32 +1,13 @@
 """Typed settings loaded from env / .env — no hardcoded secrets.
 
-These tests must be hermetic: they disable the .env file source (_env_file=None) and
-clear any ambient settings env vars, so results don't flip once a real .env exists.
+Env isolation is handled by the autouse fixture in conftest.py, so these tests don't
+depend on the host environment or a real .env.
 """
 
 import pytest
 from pydantic import ValidationError
 
 from src.config import Settings
-
-_SETTINGS_ENV_VARS = (
-    "ANTHROPIC_API_KEY",
-    "TAVILY_API_KEY",
-    "LANGFUSE_PUBLIC_KEY",
-    "LANGFUSE_SECRET_KEY",
-    "LANGFUSE_HOST",
-    "SUPERVISOR_MODEL",
-    "WORKER_MODEL",
-    "MAX_SUB_QUESTIONS",
-    "SEARCH_RESULTS_PER_QUERY",
-)
-
-
-@pytest.fixture(autouse=True)
-def _isolate_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Strip ambient settings env vars so tests don't depend on the host environment."""
-    for var in _SETTINGS_ENV_VARS:
-        monkeypatch.delenv(var, raising=False)
 
 
 def test_settings_applies_model_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
