@@ -22,8 +22,9 @@ class Settings(BaseSettings):
     langfuse_secret_key: str | None = None
     langfuse_host: str = "https://cloud.langfuse.com"
 
-    # Model routing and limits (override in .env).
-    supervisor_model: str = "claude-sonnet-4-6"
+    # Model routing and limits (override in .env). Both defaults must stay priced in
+    # observability.MODEL_COSTS — main.validate_models fails fast at startup otherwise.
+    supervisor_model: str = "claude-sonnet-5"
     worker_model: str = "claude-haiku-4-5-20251001"
     # >= 1: a zero/negative cap would fan the graph out to nothing and dead-end silently.
     max_sub_questions: int = Field(default=5, ge=1)

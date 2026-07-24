@@ -14,7 +14,7 @@ def test_settings_applies_model_defaults(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
     monkeypatch.setenv("TAVILY_API_KEY", "y")
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
-    assert settings.supervisor_model == "claude-sonnet-4-6"
+    assert settings.supervisor_model == "claude-sonnet-5"
     assert settings.worker_model == "claude-haiku-4-5-20251001"
     assert settings.max_sub_questions == 5
 

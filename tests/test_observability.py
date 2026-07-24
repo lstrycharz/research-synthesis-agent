@@ -30,6 +30,13 @@ def test_calculate_cost_sonnet_matches_hand_computation() -> None:
     assert round(cost, 6) == 0.021
 
 
+def test_calculate_cost_sonnet_5_uses_introductory_pricing() -> None:
+    # Sonnet 5 introductory pricing (through 2026-08-31): $2 in / $10 out per MTok.
+    # (2000 * $2.00 + 1000 * $10.00) / 1e6 = 14000 / 1e6 = $0.014
+    cost = calculate_cost("claude-sonnet-5", input_tokens=2000, output_tokens=1000)
+    assert round(cost, 6) == 0.014
+
+
 def test_calculate_cost_rejects_unknown_model() -> None:
     with pytest.raises(ValueError):
         calculate_cost("gpt-4", input_tokens=1, output_tokens=1)

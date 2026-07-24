@@ -19,8 +19,13 @@ if TYPE_CHECKING:
     from langfuse import Langfuse
 
 # Pricing in USD per 1,000,000 tokens. THE single source of truth — update only here.
-# Verified 2026-07: Haiku 4.5 = $1.00/$5.00, Sonnet 4.6 = $3.00/$15.00.
+# Verified 2026-07-24 against Anthropic's pricing docs:
+#   Sonnet 5   = $2.00/$10.00  (INTRODUCTORY, through 2026-08-31; rises to $3.00/$15.00 on
+#                Sep 1 2026 — bump this entry then, or logged supervisor cost drifts low).
+#   Sonnet 4.6 = $3.00/$15.00
+#   Haiku 4.5  = $1.00/$5.00
 MODEL_COSTS: dict[str, dict[str, float]] = {
+    "claude-sonnet-5": {"input": 2.00, "output": 10.00},
     "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
     "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
 }
