@@ -42,16 +42,26 @@
   cost row ($0.0322, 5 sub-qs, 8 nodes), Langfuse traces confirmed via API. Graceful degradation
   fired for real (one sub-q got off-topic Tavily hits -> summarizer confidence note, no crash).
 
+- **Chunk 11 — README** (`969b814`): portfolio README — problem, mermaid architecture, per-stage
+  model-routing table, quick start, sample output, real 4-run cost table (~$0.032/report), plus
+  Business Impact, Failure Modes, and Defend as Engineer/Stakeholder. **Repo made PUBLIC** after a
+  clean secret audit (gitleaks: 15 commits, no leaks; only `.env.example` placeholders tracked;
+  `CLAUDE.local.md` untracked). All 12 build commits pushed to origin/master.
+
 ## In Progress
-- Nothing mid-flight. Clean stopping point after Chunk 10. **Full pipeline built AND verified live.**
+- **PROJECT COMPLETE.** All 11 chunks done, verified live, public:
+  https://github.com/lstrycharz/research-synthesis-agent
 
 ## Blocked
 - None.
 
 ## Next Up (in order)
-1. **Chunk 11 — README** (portfolio + interview prep): what it solves, install, run, sample output,
-   cost table from 3–5 real runs, plus **Business Impact**, **Failure Modes**, and
-   **Defend as Engineer / Defend as Stakeholder** sections (user's explicit additions).
+- Nothing on this project. Natural follow-on = **Project 2: answer-quality evaluation**
+  (LLM-as-judge scoring faithfulness/relevance/completeness/coherence, calibrated vs a small
+  human-graded set). Noted as "what's next" in the README.
+- Optional tidy-ups (non-blocking): `.env.example` still shows `SUPERVISOR_MODEL=claude-sonnet-4-6`
+  (write-protected from the agent; change by hand to `claude-sonnet-5` for consistency). Thread the
+  startup Langfuse client through `_llm.langfuse_config` to drop per-node reconstruction.
 
 ## Known Issues / Notes
 - **Cost constants** (observability.py, single source of truth): Haiku 4.5 = $1.00/$5.00 per
