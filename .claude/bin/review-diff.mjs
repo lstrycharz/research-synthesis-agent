@@ -188,7 +188,8 @@ export function parseVerdict(apiJson) {
   try {
     obj = JSON.parse(raw);
   } catch {
-    throw new ReviewError('verdict is not valid JSON');
+    // Say what came back (one line, capped) — the bare message was undiagnosable.
+    throw new ReviewError(`verdict is not valid JSON: ${raw.replace(/[\r\n]+/g, ' ').slice(0, 120)}`);
   }
   if (obj.status !== 'PASS' && obj.status !== 'REJECT') {
     throw new ReviewError(`invalid status: ${JSON.stringify(obj.status)}`);
