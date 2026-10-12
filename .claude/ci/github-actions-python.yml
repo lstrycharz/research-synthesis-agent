@@ -1,0 +1,34 @@
+# Deterministic floor as a merge gate (GitHub Actions) — PYTHON projects.
+# Copy to .github/workflows/verify.yml, then enable branch protection so PRs
+# can't merge while this is red (see BRANCH_PROTECTION.md — that step is manual).
+#
+# Use this instead of github-actions.yml when the repo is Python. That file sets
+# up Node only; verify.sh would then find no uv/poetry and no host pytest, run
+# nothing, and hand you a green check for an unverified merge.
+#
+# Runs the SAME .claude/verify.sh as the git hooks and the agent, so the gate is
+# identical locally and in CI.
+name: verify
+on:
+  pull_request:
+  push:
+    branches: [main, master, develop, release]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # uv reads the version from .python-version / requires-python.
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      # --locked fails on lockfile drift instead of silently resolving something
+      # new — the CI env must match what was tested locally.
+      - name: Install deps
+        run: uv sync --locked
+      - name: Run the floor
+        run: bash .claude/verify.sh
+# POETRY: swap the two steps above for
+#   - uses: actions/setup-python@v5
+#     with: { python-version-file: '.python-version' }
+#   - run: pipx install poetry && poetry install
