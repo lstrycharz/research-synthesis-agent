@@ -17,10 +17,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      # NOTE: this image is Node-only. If your project has Python, verify.sh runs
-      # it via `uv run` / `poetry run` — switch to a Python-capable image or add a
-      # setup step (e.g. astral-sh/setup-uv), or the Python checks silently no-op
-      # and you get a false green.
+      # NOTE: this workflow sets up Node ONLY. If your project has Python, use
+      # github-actions-python.yml instead (or add its uv step here for a
+      # monorepo) — otherwise verify.sh's Python checks silently no-op and you
+      # get a false green.
       # Adjust install step for your stack (npm ci / pip install / etc.).
       - name: Install deps
         run: |
