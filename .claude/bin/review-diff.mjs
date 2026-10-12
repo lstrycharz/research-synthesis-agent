@@ -172,6 +172,29 @@ export function buildPayload({ systemPrompt, diff, model, openrouter = false }) 
   };
 }
 
+// Some providers put the model's thinking in `content`, verdict last (Kimi via
+// CoreWeave: ~48KB of prose, then the JSON), sometimes fenced. Take the object
+// that ENDS the reply — thinking can't come after the answer — scanning back
+// from the last '{' for the first suffix that parses. undefined if none does.
+// Each attempt parses an O(n) suffix, so the attempts are capped: nested-object
+// junk otherwise goes quadratic (80s on 240KB), past where the fetch timeout
+// protects us. A real verdict has far fewer '{' after its own opening brace.
+const MAX_VERDICT_SCAN = 256;
+function trailingJson(raw) {
+  const text = raw.trim().replace(/```\s*$/, '').trimEnd();
+  if (!text.endsWith('}')) return undefined;
+  let attempts = 0;
+  for (let i = text.lastIndexOf('{'); i >= 0; i = i > 0 ? text.lastIndexOf('{', i - 1) : -1) {
+    if (++attempts > MAX_VERDICT_SCAN) return undefined;
+    try {
+      return JSON.parse(text.slice(i));
+    } catch {
+      // not the start of the verdict object — keep scanning back
+    }
+  }
+  return undefined;
+}
+
 // Pull the verdict out of an OpenRouter/OpenAI-shaped response. Accepts either
 // json_object content or a tool-call's arguments. Throws on anything malformed —
 // a malformed verdict must never be mistaken for a PASS.
@@ -188,6 +211,9 @@ export function parseVerdict(apiJson) {
   try {
     obj = JSON.parse(raw);
   } catch {
+    obj = trailingJson(raw);
+  }
+  if (obj === undefined) {
     // Say what came back (one line, capped) — the bare message was undiagnosable.
     throw new ReviewError(`verdict is not valid JSON: ${raw.replace(/[\r\n]+/g, ' ').slice(0, 120)}`);
   }
@@ -439,7 +465,6 @@ async function main() {
 
   let verdict;
   try {
-    { const c = apiJson?.choices?.[0]; const t = String(c?.message?.content ?? ''); console.log(`DIAG finish=${c?.finish_reason} len=${t.length} reasoningField=${typeof c?.message?.reasoning} tail=${JSON.stringify(t.slice(-400))}`); } // TEMP DIAGNOSTIC
     verdict = parseVerdict(apiJson);
   } catch (err) {
     console.warn(`⚠️  ADVISORY — logic reviewer returned an unparseable verdict (${err.message}); skipping (not blocking).`);
