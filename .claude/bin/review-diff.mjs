@@ -439,6 +439,7 @@ async function main() {
 
   let verdict;
   try {
+    { const c = apiJson?.choices?.[0]; const t = String(c?.message?.content ?? ''); console.log(`DIAG finish=${c?.finish_reason} len=${t.length} reasoningField=${typeof c?.message?.reasoning} tail=${JSON.stringify(t.slice(-400))}`); } // TEMP DIAGNOSTIC
     verdict = parseVerdict(apiJson);
   } catch (err) {
     console.warn(`⚠️  ADVISORY — logic reviewer returned an unparseable verdict (${err.message}); skipping (not blocking).`);
